@@ -50,7 +50,7 @@ const allData = {
   }
 }
 
-const months = ['Leden', 'Únor']
+const ALL_MONTHS = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec']
 
 function enrich(data) {
   return data.map(d => ({
@@ -190,23 +190,37 @@ export default function Dashboard() {
       .then(r => r.json())
       .then(data => {
         if (data.campaigns && Object.keys(data.campaigns).length > 0) {
-          setLiveData(data.campaigns)
+          // Sloučit live data s ukázkovými - live data mají přednost
+          const merged = { ...allData }
+          Object.entries(data.campaigns).forEach(([key, val]) => {
+            if (val.weeks && val.weeks.length > 0) {
+              merged[key] = val
+            }
+          })
+          setLiveData(merged)
           if (data.targets) setLiveTargets(data.targets)
         }
       })
-      .catch(() => {}) // Fallback na ukázková data
+      .catch(() => {})
   }, [])
 
   const currentData = liveData || allData
   const currentTargets = liveTargets || TARGETS
-  const campaign = currentData[activeCampaign]
+  const campaign = currentData[activeCampaign] || allData[activeCampaign]
+
+  // Dynamicky zjistit měsíce z dat
+  const months = useMemo(() => {
+    if (!campaign?.weeks) return ALL_MONTHS.slice(0, 2)
+    const found = [...new Set(campaign.weeks.map(w => w.month))]
+    return ALL_MONTHS.filter(m => found.includes(m))
+  }, [campaign])
 
   const filteredWeeks = useMemo(() =>
-    enrich(campaign.weeks.filter(w => selectedMonth === 'Vše' || w.month === selectedMonth)),
-    [activeCampaign, selectedMonth]
+    enrich((campaign?.weeks || []).filter(w => selectedMonth === 'Vše' || w.month === selectedMonth)),
+    [activeCampaign, selectedMonth, campaign]
   )
 
-  const monthlyData = useMemo(() => groupByMonth(campaign.weeks), [activeCampaign])
+  const monthlyData = useMemo(() => groupByMonth(campaign?.weeks || []), [activeCampaign, campaign])
 
   const displayData = view === 'weekly'
     ? filteredWeeks.map(d => ({ ...d, label: d.week }))

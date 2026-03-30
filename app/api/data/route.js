@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, initDb } from '../../../lib/db'
 
+const MONTH_MAP = {
+  'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
+  'May': 'Květen', 'June': 'Červen', 'July': 'Červenec', 'August': 'Srpen',
+  'September': 'Září', 'October': 'Říjen', 'November': 'Listopad', 'December': 'Prosinec',
+}
+
+function toCzechMonth(m) {
+  return MONTH_MAP[m] || m
+}
+
 function checkAuth(request) {
   const apiKey = request.headers.get('x-api-key')
   const secret = process.env.API_SECRET || 'da-dashboard-2026'
@@ -23,7 +33,7 @@ export async function GET() {
           .filter(w => w.campaign_id === c.id)
           .map(w => ({
             week: `${w.week_start} - ${w.week_end}`,
-            month: w.month,
+            month: toCzechMonth(w.month),
             adSpend: w.ad_spend,
             visitors: w.visitors,
             leads: w.leads,
