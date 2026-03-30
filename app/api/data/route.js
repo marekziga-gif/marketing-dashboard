@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -61,6 +61,27 @@ export async function POST(request) {
   try {
     await initDb()
     const body = await request.json()
+
+    // Aktualizace pouze Meta Ads dat (nezmění orders/revenue)
+    if (body.action === 'update_meta_ads') {
+      await upsertCampaign(body.campaign_id, body.campaign_name)
+      await upsertMetaAdsData({
+        campaign_id: body.campaign_id,
+        week_start: body.week_start,
+        week_end: body.week_end,
+        month: body.month,
+        ad_spend: body.ad_spend || 0,
+        visitors: body.visitors || 0,
+        leads: body.leads || 0,
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    // Smazání konkrétního týdne
+    if (body.action === 'delete_week') {
+      await deleteWeek(body.campaign_id, body.week_start)
+      return NextResponse.json({ success: true })
+    }
 
     // Reset FAPI dat pro kampaň (před čistým importem)
     if (body.action === 'reset_fapi') {
