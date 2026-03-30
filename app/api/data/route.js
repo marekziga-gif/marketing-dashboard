@@ -91,9 +91,8 @@ export async function POST(request) {
 
         // Ujisti se, že týden existuje v DB
         await upsertCampaign(body.campaign_id || 'mistr-nabidek', body.campaign_name || 'Mistr nabídek')
-        try {
-          await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
-        } catch {
+        const updated = await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
+        if (!updated) {
           // Týden ještě neexistuje - vytvoříme ho
           await upsertWeeklyData({
             campaign_id: body.campaign_id || 'mistr-nabidek',
