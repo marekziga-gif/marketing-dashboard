@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, deleteCampaign, isInvoiceProcessed, markInvoiceProcessed, resetProcessedInvoices, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, deleteCampaign, claimInvoice, resetProcessedInvoices, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -104,14 +104,6 @@ export async function POST(request) {
 
       // Pokud má paid_on, automaticky najdi správný týden
       if (body.paid_on) {
-        // Deduplikace - každá faktura se počítá jen jednou
-        if (body.invoice_id) {
-          const alreadyDone = await isInvoiceProcessed(String(body.invoice_id), campaignId)
-          if (alreadyDone) {
-            return NextResponse.json({ success: true, skipped: true })
-          }
-        }
-
         const paidDate = new Date(body.paid_on)
         const day = paidDate.getUTCDate()
         // Najdi pondělí daného týdne (UTC)
@@ -126,6 +118,14 @@ export async function POST(request) {
         const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
         const monthName = monthNames[monday.getUTCMonth()]
 
+        // Atomická deduplikace - každá faktura se počítá jen jednou (ochrana před souběžnými běhy)
+        if (body.invoice_id) {
+          const claimed = await claimInvoice(String(body.invoice_id), campaignId, weekStart)
+          if (!claimed) {
+            return NextResponse.json({ success: true, skipped: true })
+          }
+        }
+
         await upsertCampaign(campaignId, body.campaign_name || 'Mistr nabídek')
         const updated = await addInvoiceToWeek(campaignId, weekStart, total)
         if (!updated) {
@@ -136,10 +136,6 @@ export async function POST(request) {
             bump1: 0, bump2: 0, vip: 0,
           })
           await addInvoiceToWeek(campaignId, weekStart, total)
-        }
-
-        if (body.invoice_id) {
-          await markInvoiceProcessed(String(body.invoice_id), campaignId, weekStart)
         }
 
         return NextResponse.json({ success: true, added_revenue: total, week: `${weekStart} - ${weekEnd}` })
