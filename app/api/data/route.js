@@ -69,10 +69,10 @@ export async function POST(request) {
         campaign_id: body.campaign_id,
         week_start: body.week_start,
         week_end: body.week_end,
-        month: body.month,
-        ad_spend: body.ad_spend || 0,
-        visitors: body.visitors || 0,
-        leads: body.leads || 0,
+        month: toCzechMonth(body.month),
+        ad_spend: parseFloat(body.ad_spend) || 0,
+        visitors: parseInt(body.visitors) || 0,
+        leads: parseInt(body.leads) || 0,
       })
       return NextResponse.json({ success: true })
     }
