@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, deleteCampaign, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -80,6 +80,12 @@ export async function POST(request) {
     // Smazání konkrétního týdne
     if (body.action === 'delete_week') {
       await deleteWeek(body.campaign_id, body.week_start)
+      return NextResponse.json({ success: true })
+    }
+
+    // Smazání celé kampaně
+    if (body.action === 'delete_campaign') {
+      await deleteCampaign(body.campaign_id)
       return NextResponse.json({ success: true })
     }
 
