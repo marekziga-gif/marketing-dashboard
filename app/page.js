@@ -226,10 +226,16 @@ export default function Dashboard() {
     ? filteredWeeks.map(d => ({ ...d, label: d.week }))
     : monthlyData
 
-  const totals = sumRows(view === 'weekly' ? filteredWeeks : campaign.weeks)
+  const totals = sumRows(view === 'weekly' ? filteredWeeks : (campaign?.weeks || []))
 
-  const prevMonth = selectedMonth === 'Únor' ? 'Leden' : null
-  const prevTotals = prevMonth ? sumRows(enrich(campaign.weeks.filter(w => w.month === prevMonth))) : null
+  // Dynamický trend - aktuální vs předchozí měsíc
+  const prevMonth = useMemo(() => {
+    if (selectedMonth === 'Vše' || months.length < 2) return null
+    const idx = ALL_MONTHS.indexOf(selectedMonth)
+    const prev = ALL_MONTHS[idx - 1]
+    return months.includes(prev) ? prev : null
+  }, [selectedMonth, months])
+  const prevTotals = prevMonth ? sumRows(enrich((campaign?.weeks || []).filter(w => w.month === prevMonth))) : null
 
   // Heatmapa hodnoty
   const heatValues = useMemo(() => ({
