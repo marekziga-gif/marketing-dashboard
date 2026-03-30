@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, deleteCampaign, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, upsertMetaAdsData, deleteWeek, deleteCampaign, isInvoiceProcessed, markInvoiceProcessed, resetProcessedInvoices, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -93,47 +93,60 @@ export async function POST(request) {
     if (body.action === 'reset_fapi') {
       const campaignId = body.campaign_id || 'mistr-nabidek'
       await resetCampaignFapi(campaignId)
+      await resetProcessedInvoices(campaignId)
       return NextResponse.json({ success: true, reset: campaignId })
     }
 
     // Přidání faktury s automatickým přiřazením do týdne
     if (body.action === 'add_invoice') {
+      const campaignId = body.campaign_id || 'mistr-nabidek'
       const total = parseFloat(body.total || 0) + parseFloat(body.total_vat || 0)
 
       // Pokud má paid_on, automaticky najdi správný týden
       if (body.paid_on) {
-        const paidDate = new Date(body.paid_on)
-        const day = paidDate.getDate()
-        const month = paidDate.getMonth() + 1
-        // Najdi pondělí daného týdne
-        const dayOfWeek = paidDate.getDay()
-        const monday = new Date(paidDate)
-        monday.setDate(day - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-        const sunday = new Date(monday)
-        sunday.setDate(monday.getDate() + 6)
-        const weekStart = `${monday.getDate()}.${monday.getMonth() + 1}.`
-        const weekEnd = `${sunday.getDate()}.${sunday.getMonth() + 1}.`
-        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
-        const monthName = monthNames[monday.getMonth()]
+        // Deduplikace - každá faktura se počítá jen jednou
+        if (body.invoice_id) {
+          const alreadyDone = await isInvoiceProcessed(String(body.invoice_id), campaignId)
+          if (alreadyDone) {
+            return NextResponse.json({ success: true, skipped: true })
+          }
+        }
 
-        // Ujisti se, že týden existuje v DB
-        await upsertCampaign(body.campaign_id || 'mistr-nabidek', body.campaign_name || 'Mistr nabídek')
-        const updated = await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
+        const paidDate = new Date(body.paid_on)
+        const day = paidDate.getUTCDate()
+        // Najdi pondělí daného týdne (UTC)
+        const dayOfWeek = paidDate.getUTCDay()
+        const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+        const monday = new Date(paidDate)
+        monday.setUTCDate(day - mondayOffset)
+        const sunday = new Date(monday)
+        sunday.setUTCDate(monday.getUTCDate() + 6)
+        const weekStart = `${monday.getUTCDate()}.${monday.getUTCMonth() + 1}.`
+        const weekEnd = `${sunday.getUTCDate()}.${sunday.getUTCMonth() + 1}.`
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+        const monthName = monthNames[monday.getUTCMonth()]
+
+        await upsertCampaign(campaignId, body.campaign_name || 'Mistr nabídek')
+        const updated = await addInvoiceToWeek(campaignId, weekStart, total)
         if (!updated) {
-          // Týden ještě neexistuje - vytvoříme ho
           await upsertWeeklyData({
-            campaign_id: body.campaign_id || 'mistr-nabidek',
+            campaign_id: campaignId,
             week_start: weekStart, week_end: weekEnd, month: monthName,
             ad_spend: 0, visitors: 0, leads: 0, orders: 0, revenue: 0,
             bump1: 0, bump2: 0, vip: 0,
           })
-          await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
+          await addInvoiceToWeek(campaignId, weekStart, total)
         }
+
+        if (body.invoice_id) {
+          await markInvoiceProcessed(String(body.invoice_id), campaignId, weekStart)
+        }
+
         return NextResponse.json({ success: true, added_revenue: total, week: `${weekStart} - ${weekEnd}` })
       }
 
       // Fallback - ruční week_start
-      await addInvoiceToWeek(body.campaign_id, body.week_start, total)
+      await addInvoiceToWeek(campaignId, body.week_start, total)
       return NextResponse.json({ success: true, added_revenue: total })
     }
 
