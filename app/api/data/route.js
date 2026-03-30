@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, resetCampaignFapi, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -61,6 +61,13 @@ export async function POST(request) {
   try {
     await initDb()
     const body = await request.json()
+
+    // Reset FAPI dat pro kampaň (před čistým importem)
+    if (body.action === 'reset_fapi') {
+      const campaignId = body.campaign_id || 'mistr-nabidek'
+      await resetCampaignFapi(campaignId)
+      return NextResponse.json({ success: true, reset: campaignId })
+    }
 
     // Přidání faktury s automatickým přiřazením do týdne
     if (body.action === 'add_invoice') {
