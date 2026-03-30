@@ -178,7 +178,7 @@ function ExportButton({ label, onClick }) {
 export default function Dashboard() {
   const [activeCampaign, setActiveCampaign] = useState('mistr-nabidek')
   const [view, setView] = useState('weekly')
-  const [selectedMonth, setSelectedMonth] = useState('Únor')
+  const [selectedMonth, setSelectedMonth] = useState('Vše')
   const [tab, setTab] = useState('detail')
   const [liveData, setLiveData] = useState(null)
   const [liveTargets, setLiveTargets] = useState(null)
