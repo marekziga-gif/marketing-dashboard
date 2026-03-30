@@ -62,6 +62,13 @@ export async function POST(request) {
     await initDb()
     const body = await request.json()
 
+    // Formát 2: Přidání faktury (action: "add_invoice") - musí být PRVNÍ
+    if (body.action === 'add_invoice') {
+      const total = parseFloat(body.total || 0) + parseFloat(body.total_vat || 0)
+      await addInvoiceToWeek(body.campaign_id, body.week_start, total)
+      return NextResponse.json({ success: true, added_revenue: total })
+    }
+
     // Formát 1: Přímá data (všechno najednou)
     if (body.campaign_id && body.campaign_name) {
       await upsertCampaign(body.campaign_id, body.campaign_name)
@@ -108,13 +115,6 @@ export async function POST(request) {
         bump2,
         vip,
       })
-    }
-
-    // Formát 2: Přidání faktury (action: "add_invoice")
-    if (body.action === 'add_invoice') {
-      const total = parseFloat(body.total || 0) + parseFloat(body.total_vat || 0)
-      await addInvoiceToWeek(body.campaign_id, body.week_start, total)
-      return NextResponse.json({ success: true, added_revenue: total })
     }
 
     if (body.targets) {
