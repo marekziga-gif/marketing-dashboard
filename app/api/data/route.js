@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, initDb } from '../../../lib/db'
+import { getCampaigns, getAllWeeklyData, getTargets, upsertCampaign, upsertWeeklyData, updateTargets, addInvoiceToWeek, initDb } from '../../../lib/db'
 
 const MONTH_MAP = {
   'January': 'Leden', 'February': 'Únor', 'March': 'Březen', 'April': 'Duben',
@@ -108,6 +108,13 @@ export async function POST(request) {
         bump2,
         vip,
       })
+    }
+
+    // Formát 2: Přidání faktury (action: "add_invoice")
+    if (body.action === 'add_invoice') {
+      const total = parseFloat(body.total || 0) + parseFloat(body.total_vat || 0)
+      await addInvoiceToWeek(body.campaign_id, body.week_start, total)
+      return NextResponse.json({ success: true, added_revenue: total })
     }
 
     if (body.targets) {
