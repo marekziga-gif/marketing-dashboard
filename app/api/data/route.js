@@ -62,11 +62,38 @@ export async function POST(request) {
     await initDb()
     const body = await request.json()
 
+    // Formát 1: Přímá data (všechno najednou)
     if (body.campaign_id && body.campaign_name) {
       await upsertCampaign(body.campaign_id, body.campaign_name)
     }
 
     if (body.week_start) {
+      // Pokud přijdou raw faktury (pole invoices), agregujeme je
+      let orders = body.orders || 0
+      let revenue = body.revenue || 0
+      let bump1 = body.bump1 || 0
+      let bump2 = body.bump2 || 0
+      let vip = body.vip || 0
+
+      if (body.invoices && Array.isArray(body.invoices)) {
+        orders = body.invoices.length
+        revenue = body.invoices.reduce((sum, inv) => {
+          const total = parseFloat(inv.total || 0) + parseFloat(inv.total_vat || 0)
+          return sum + total
+        }, 0)
+        // Počítání bumpů a VIP z položek faktur
+        body.invoices.forEach(inv => {
+          if (inv.items && Array.isArray(inv.items)) {
+            inv.items.forEach(item => {
+              const name = (item.name || '').toLowerCase()
+              if (name.includes('bump 1') || name.includes('bump1')) bump1++
+              else if (name.includes('bump 2') || name.includes('bump2')) bump2++
+              else if (name.includes('vip')) vip++
+            })
+          }
+        })
+      }
+
       await upsertWeeklyData({
         campaign_id: body.campaign_id,
         week_start: body.week_start,
@@ -75,11 +102,11 @@ export async function POST(request) {
         ad_spend: body.ad_spend || 0,
         visitors: body.visitors || 0,
         leads: body.leads || 0,
-        orders: body.orders || 0,
-        revenue: body.revenue || 0,
-        bump1: body.bump1 || 0,
-        bump2: body.bump2 || 0,
-        vip: body.vip || 0,
+        orders,
+        revenue,
+        bump1,
+        bump2,
+        vip,
       })
     }
 
