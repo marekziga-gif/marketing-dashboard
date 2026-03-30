@@ -62,9 +62,44 @@ export async function POST(request) {
     await initDb()
     const body = await request.json()
 
-    // Formát 2: Přidání faktury (action: "add_invoice") - musí být PRVNÍ
+    // Přidání faktury s automatickým přiřazením do týdne
     if (body.action === 'add_invoice') {
       const total = parseFloat(body.total || 0) + parseFloat(body.total_vat || 0)
+
+      // Pokud má paid_on, automaticky najdi správný týden
+      if (body.paid_on) {
+        const paidDate = new Date(body.paid_on)
+        const day = paidDate.getDate()
+        const month = paidDate.getMonth() + 1
+        // Najdi pondělí daného týdne
+        const dayOfWeek = paidDate.getDay()
+        const monday = new Date(paidDate)
+        monday.setDate(day - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+        const sunday = new Date(monday)
+        sunday.setDate(monday.getDate() + 6)
+        const weekStart = `${monday.getDate()}.${monday.getMonth() + 1}.`
+        const weekEnd = `${sunday.getDate()}.${sunday.getMonth() + 1}.`
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+        const monthName = monthNames[monday.getMonth()]
+
+        // Ujisti se, že týden existuje v DB
+        await upsertCampaign(body.campaign_id || 'mistr-nabidek', body.campaign_name || 'Mistr nabídek')
+        try {
+          await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
+        } catch {
+          // Týden ještě neexistuje - vytvoříme ho
+          await upsertWeeklyData({
+            campaign_id: body.campaign_id || 'mistr-nabidek',
+            week_start: weekStart, week_end: weekEnd, month: monthName,
+            ad_spend: 0, visitors: 0, leads: 0, orders: 0, revenue: 0,
+            bump1: 0, bump2: 0, vip: 0,
+          })
+          await addInvoiceToWeek(body.campaign_id || 'mistr-nabidek', weekStart, total)
+        }
+        return NextResponse.json({ success: true, added_revenue: total, week: `${weekStart} - ${weekEnd}` })
+      }
+
+      // Fallback - ruční week_start
       await addInvoiceToWeek(body.campaign_id, body.week_start, total)
       return NextResponse.json({ success: true, added_revenue: total })
     }
